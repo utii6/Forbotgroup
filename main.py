@@ -6,7 +6,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 
 # ===== إعدادات =====
 TOKEN = os.getenv("6433743426:AAHYO2pUCSBJJf9nKPeVS7ponZj_SvcA90M")  # حط التوكن داخل Secrets في Render
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # رابط الخدمة من Render (مثل https://yourapp.onrender.com)
+WEBHOOK_URL = os.getenv("https://forbotgroup.onrender.com")  # رابط الخدمة من Render (مثل https://yourapp.onrender.com)
 
 logging.basicConfig(level=logging.INFO)
 
