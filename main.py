@@ -1,16 +1,23 @@
+import os
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ChatPermissions
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from fastapi import FastAPI, Request
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, ContextTypes
 
 # ===== إعدادات =====
-TOKEN = "6433743426:AAHYO2pUCSBJJf9nKPeVS7ponZj_SvcA90M"
-CHANNEL = "@qd3qd"   # القناة المطلوبة للاشتراك
-ADMIN_ID = 5581457665      # الآيدي الخاص بك
+TOKEN = os.getenv("6433743426:AAHYO2pUCSBJJf9nKPeVS7ponZj_SvcA90M")  # حط التوكن داخل Secrets في Render
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # رابط الخدمة من Render (مثل https://yourapp.onrender.com)
 
-# ===== Logs =====
 logging.basicConfig(level=logging.INFO)
 
-# ===== أوامر /start =====
+# FastAPI App
+app = FastAPI()
+
+# Telegram Bot Application
+application = Application.builder().token(TOKEN).build()
+
+
+# ===== /start command =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """
 ✨ أهلاً بك في بوت الحماية ✨
@@ -22,80 +29,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 2️⃣ ارفعه "مشرف"  
 3️⃣ أرسل كلمة { تفعيل } ليبدأ البوت بالعمل  
 ━━━━━━━━━━━━━
-✦ معرف البوت: @iDiXbot
-✦ المطور: @E2E12
+✦ معرف البوت: @iDiXbot 
+✦ المطور:💁 @E2E12
 """
     keyboard = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("➕✅ أضفني لمجموعتك", url="https://t.me/iDiXbot?startgroup=true")]]
+        [[InlineKeyboardButton("➕ أضفني لمجموعتك", url="https://t.me/iDiXbot?startgroup=true")]]
     )
     await update.message.reply_text(text, reply_markup=keyboard)
 
 
-# ===== أمر التفعيل داخل المجموعات =====
-async def activate(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-
-    if chat.type in ["group", "supergroup"]:
-        await update.message.reply_text(
-            f"👍✅ تم تفعيل البوت بنجاح في المجموعة: {chat.title}"
-        )
-        await context.bot.send_message(
-            chat_id=ADMIN_ID,
-            text=f"📶😂 تم تفعيل البوت في مجموعة جديدة:\n\n• الاسم: {chat.title}\n• الآيدي: {chat.id}"
-        )
-    else:
-        await update.message.reply_text("!❌ هذا الأمر يعمل فقط داخل المجموعات")
+# أضف الأمر للبوت
+application.add_handler(CommandHandler("start", start))
 
 
-# ===== تحقق من الاشتراك =====
-async def is_subscribed(user_id, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        member = await context.bot.get_chat_member(CHANNEL, user_id)
-        return member.status in ["member", "administrator", "creator"]
-    except:
-        return False
+# ===== Webhook =====
+@app.on_event("startup")
+async def startup_event():
+    # إعداد Webhook عند تشغيل الخدمة
+    await application.bot.set_webhook(f"{WEBHOOK_URL}/webhook")
 
 
-# ===== منع الرسائل لغير المشتركين =====
-async def restrict_unsubscribed(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    chat_id = update.effective_chat.id
-
-    if await is_subscribed(user.id, context):
-        await context.bot.restrict_chat_member(
-            chat_id=chat_id,
-            user_id=user.id,
-            permissions=ChatPermissions(can_send_messages=True)
-        )
-        return
-
-    try:
-        await update.message.delete()
-    except:
-        pass
-
-    keyboard = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("📢 مَـدار", url=f"https://t.me/{CHANNEL.strip('@')}")]]
-    )
-    text = f"""
-• عذراً عزيزي {user.first_name} ⚠️
-• لا يمكنك ارسال الرسائل هنا الا بعد الاشتراك في قناة المجموعة 👮‍♂
-- قناة المجموعة | {CHANNEL}
-• اشترك لكي تستطيع إرسال الرسائل ❤️‍🔥.
-"""
-    await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=keyboard)
-
-
-# ===== تشغيل البوت =====
-def main():
-    app = Application.builder().token(TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^(تفعيل)$"), activate))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, restrict_unsubscribed))
-
-    app.run_polling()
-
-
-if __name__ == "__main__":
-    main()
+@app.post("/webhook")
+async def webhook(request: Request):
+    data = await request.json()
+    update = Update.de_json(data, application.bot)
+    await application.process_update(update)
+    return {"ok": True}
